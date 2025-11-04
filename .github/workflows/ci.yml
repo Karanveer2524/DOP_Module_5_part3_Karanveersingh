@@ -1,112 +1,46 @@
-name: CI Pipeline  ## Workflow name shown in GitHub Actions UI
+name: Docker Build and Test
 
 on:
   push:
-    brancname: CI Pipeline  ## Workflow name shown in GitHub Actions UI
-
-on:
-  push:
-    branches:
-      - main  ## Run on any push to main
+    branches: [ main ]
   pull_request:
-    branches:
-      - main ## Run on PRs targeting main
+    branches: [ main ]
 
 jobs:
-  test-backend:
-    runs-on: ubuntu-latest   ## Use GitHub’s hosted Ubuntu runner
-
-    # Spin up a MongoDB sidecar container for the job (even though tests use mongomock).
-    services:
-      mongo:
-        image: mongo:latest   ## Official MongoDB image
-        ports:
-          - 27017:27017  ## Publish container port 27017 to the runner’s localhost:27017
-        env:
-          MONGO_INITDB_ROOT_USERNAME: root  ## Create an admin user
-          MONGO_INITDB_ROOT_PASSWORD: example
-        options: >-
-          --health-cmd "mongosh --eval 'db.runCommand(\"ping\").ok'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
+  build-and-test:
+    runs-on: ubuntu-latest
+    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.13.3' # Match the project’s Python version
-          
-      - name: Install backend dependencies
-        working-directory: ./backend
-        run: |
-          pip install -r requirements.txt
-          pip install pytest
-
-      - name: Run backend tests  # All commands below run in ./backend
-        working-directory: ./backend
-      # Connection string for a real MongoDB (service above).
-      # NOTE: your tests currently patch Mongo with mongomock in conftest.py,
-      # so this is mostly for parity/local runs and won’t be used by the tests.
-        env:
-          MONGO_URI: "mongodb://root:example@localhost:27017/test_db?authSource=admin"
-          FLASK_ENV: "testing" # Put the app in testing mode if referenced by app code
-        run: pytest -q tests/  # Run all tests under backend/tests with quiet output
-
-
-
-hes:
-      - main  ## Run on any push to main
-  pull_request:
-    branches:
-      - main ## Run on PRs targeting main
-
-jobs:
-  test-backend:
-    runs-on: ubuntu-latest   ## Use GitHub’s hosted Ubuntu runner
-
-    # Spin up a MongoDB sidecar container for the job (even though tests use mongomock).
-    services:
-      mongo:
-        image: mongo:latest   ## Official MongoDB image
-        ports:
-          - 27017:27017  ## Publish container port 27017 to the runner’s localhost:27017
-        env:
-          MONGO_INITDB_ROOT_USERNAME: root  ## Create an admin user
-          MONGO_INITDB_ROOT_PASSWORD: example
-        options: >-
-          --health-cmd "mongosh --eval 'db.runCommand(\"ping\").ok'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.13.3' # Match the project’s Python version
-          
-      - name: Install backend dependencies
-        working-directory: ./backend
-        run: |
-          pip install -r requirements.txt
-          pip install pytest
-
-      - name: Run backend tests  # All commands below run in ./backend
-        working-directory: ./backend
-      # Connection string for a real MongoDB (service above).
-      # NOTE: your tests currently patch Mongo with mongomock in conftest.py,
-      # so this is mostly for parity/local runs and won’t be used by the tests.
-        env:
-          MONGO_URI: "mongodb://root:example@localhost:27017/test_db?authSource=admin"
-          FLASK_ENV: "testing" # Put the app in testing mode if referenced by app code
-        run: pytest -q tests/  # Run all tests under backend/tests with quiet output
-
-
-
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+    
+    - name: Build and start services
+      run: |
+        docker-compose up -d --build
+        sleep 30
+    
+    - name: Check running containers
+      run: docker-compose ps
+    
+    - name: Test frontend is accessible
+      run: |
+        curl -f http://localhost/ || exit 1
+    
+    - name: Test backend API
+      run: |
+        curl -f http://localhost/api/login || exit 1
+    
+    - name: Test transactions API
+      run: |
+        curl -f http://localhost/api/transactions || exit 1
+    
+    - name: View logs
+      if: always()
+      run: docker-compose logs
+    
+    - name: Stop services
+      if: always()
+      run: docker-compose down -v
