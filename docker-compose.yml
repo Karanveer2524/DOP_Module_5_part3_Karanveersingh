@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  mongo:
+    image: mongo:6.0
+    container_name: prf_mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - microservices-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: prf_backend
+    environment:
+      - FLASK_ENV=development
+      - MONGO_URI=mongodb://mongo:27017/bank_app
+      - SECRET_KEY=supersecretkey
+    depends_on:
+      - mongo
+    restart: unless-stopped
+    networks:
+      - microservices-network
+
+  transactions:
+    build:
+      context: ./transactions
+      dockerfile: Dockerfile
+    container_name: prf_transactions
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/bank_app
+      - PORT=3000
+    depends_on:
+      - mongo
+    restart: unless-stopped
+    networks:
+      - microservices-network
+
+  frontend:
+    build:
+      context: ./studentportfolio
+      dockerfile: Dockerfile
+    container_name: prf_frontend
+    depends_on:
+      - backend
+      - transactions
+    restart: unless-stopped
+    networks:
+      - microservices-network
+
+  nginx:
+    image: nginx:alpine
+    container_name: prf_nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - backend
+      - transactions
+    restart: unless-stopped
+    networks:
+      - microservices-network
+
+volumes:
+  mongo_data:
+
+networks:
+  microservices-network:
+    driver: bridge
