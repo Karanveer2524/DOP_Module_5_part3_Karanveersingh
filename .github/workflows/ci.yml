@@ -19,11 +19,11 @@ jobs:
     
     - name: Build and start services
       run: |
-        docker-compose up -d --build
+        docker compose up -d --build
         sleep 30
     
     - name: Check running containers
-      run: docker-compose ps
+      run: docker compose ps
     
     - name: Test frontend is accessible
       run: |
@@ -39,8 +39,8 @@ jobs:
     
     - name: View logs
       if: always()
-      run: docker-compose logs
+      run: docker compose logs
     
     - name: Stop services
       if: always()
-      run: docker-compose down -v
+      run: docker compose down -v
